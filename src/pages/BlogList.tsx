@@ -104,19 +104,28 @@ export const blogPosts = [
 
         <div class="bg-black/30 p-6 rounded-lg border border-white/10 my-6 shadow-xl">
           <h4 class="text-lg font-bold text-java-orange mb-4">Graph Explanation</h4>
-          <p class="mb-4">The standard latency profile (Fig. 28) reveals that <strong>ReactiveChainDB v2 consistently achieves the lowest median latency across all transaction volumes.</strong></p>
+          <p class="mb-4">The log-scale latency chart above reveals that <strong>ReactiveChainDB v2 consistently achieves the lowest latency profile across all percentiles.</strong></p>
           <ul class="list-disc pl-6 space-y-4 text-java-light/80">
-            <li><strong>ReactiveChainDB:</strong> Maintains an ultra-low <strong>2ms median latency</strong> and remains highly performant at the 99th percentile (1,265ms) and 99.9th percentile (16,588ms). This advantage is a direct consequence of Phase 1’s Virtual Thread Ingestion pipeline, where the LMAX Disruptor decouples transaction acceptance from downstream processing, and the GPU hardware-fused execution model natively handles the heavy lifting.</li>
-            <li><strong>ScyllaDB:</strong> While its shard-per-core model provides competitive latency at lower volumes (120ms at p50), its performance degrades significantly at the tail end (28,873ms at p99 and 72,509ms at p99.9) as cross-shard coordination overhead increases under extreme ingestion pressure.</li>
+            <li><strong>ReactiveChainDB:</strong> Maintains an ultra-low <strong>2ms median latency</strong> and remains highly performant at the 99th percentile (1,265ms). This advantage is a direct consequence of Phase 1’s Virtual Thread Ingestion pipeline, where the LMAX Disruptor decouples transaction acceptance from downstream processing. Because we move the entire consensus and backpressure execution to the GPU with a strict zero-CPU-fallback policy, the hardware-fused execution model natively handles the heavy lifting, eliminating context-switching bottlenecks entirely.</li>
+            <li><strong>ScyllaDB:</strong> While its shard-per-core model provides competitive latency at lower volumes (120ms at p50), its performance degrades significantly at the tail end (28,873ms at p99 and 72,509ms at p99.9) as cross-shard coordination overhead increases under extreme ingestion pressure on the CPU.</li>
             <li><strong>RocksDB:</strong> Constrained by its single-threaded compaction model and CPU bottlenecking, it exhibits severe tail latency spikes across the board, ranging from 8,542ms at the median up to ~68,574ms at the 99.9th percentile.</li>
           </ul>
         </div>
+        
+        <h3 class="text-xl font-bold text-java-blue mt-10">The Bottleneck: Why CPU-Bound Systems Fail at Scale</h3>
+        <p>Traditional database architectures—even highly optimized ones like ScyllaDB—eventually hit a hard ceiling when deployed in extreme-throughput environments. The primary culprit? <strong>CPU context switching and cross-shard coordination.</strong></p>
+        <p>In a typical thread-per-core or shard-per-core model, lower volumes are handled gracefully. However, as ingestion pressure surges and cryptographic verification workloads multiply, the CPU spends an increasing percentage of its time simply managing thread states, acquiring locks, and coordinating state across shards rather than executing actual business logic. This is exactly why we see ScyllaDB’s latency explode from 120ms at p50 to a crippling 72,509ms at p99.9.</p>
 
-        <p>The payload processing breakdown (Fig. 39) highlights the distribution of transaction components during ingestion. By leveraging the Virtual Thread pipeline, ReactiveChainDB v2 efficiently categorizes and processes different payload types concurrently. The hardware-fused execution model ensures that larger cryptographic payloads do not monopolize execution threads, maintaining a consistent throughput stream regardless of transaction complexity.</p>
-
-        <p>System efficiency is further detailed in the bubble chart (Fig. 40), which maps the correlation between throughput capacity, median latency, and resource consumption. ReactiveChainDB v2 occupies the optimal quadrant, representing maximum throughput with minimal latency inflation. The clustering of data points confirms the stability provided by the ZeroBlocking Double-Buffered Memtable and the asynchronous backpressure mechanisms under varying load conditions.</p>
-
-        <p>Finally, the network connection stability (Fig. 41) illustrates the resilience of the gossip protocol and peer-to-peer routing layer. The tightly grouped strip plot for ReactiveChainDB v2 indicates minimal connection drops and consistent peer latency, which is essential for maintaining the synchronous DAG progression. This resilience is directly attributed to the Latency-Aware BFS Network Routing executed by the GPU, ensuring that the validator network remains robust even under extreme ingestion pressure.</p>
+        <h3 class="text-xl font-bold text-java-blue mt-8">The Solution: Zero-CPU-Fallback & Virtual Thread Ingestion</h3>
+        <p>To shatter this ceiling, ReactiveChainDB v2 completely abandons the CPU for heavy execution. By implementing our <strong>Virtual Thread Ingestion pipeline</strong>, we fundamentally decoupled transaction acceptance from downstream processing. We utilize an LMAX Disruptor pattern to rapidly ingest and sequence incoming payloads without blocking.</p>
+        <p>Once sequenced, the payloads are offloaded directly to the GPU. Our strict <strong>Zero-CPU-Fallback policy</strong> ensures that under no circumstances does the system attempt to route overflow processing back to the CPU. If the GPU is saturated, our asynchronous backpressure mechanisms engage instantly, applying backpressure at the network edge rather than allowing the internal CPU queues to bloat and crash the node.</p>
+        
+        <h3 class="text-xl font-bold text-java-blue mt-8">Hardware-Fused Execution: Taming the 99.9th Percentile</h3>
+        <p>The true magic of this architecture reveals itself at the tail end of the latency curve. Cryptographic validation—signature verification, hashing, and state trie updates—are notoriously expensive. On a CPU, a few massive transactions can stall an entire shard. On a GPU, thousands of these validations are processed concurrently in massively parallel SIMT (Single Instruction, Multiple Threads) batches.</p>
+        <p>This "Hardware-Fused Execution" model prevents large or complex payloads from monopolizing execution resources. The result is undeniable: even at the absolute extreme 99.9th percentile, ReactiveChainDB v2 processes transactions in just 16.5 seconds (16,588ms), whereas legacy architectures are completely overwhelmed, taking over a full minute to recover.</p>
+        
+        <p class="mt-8 text-java-light/90 italic border-l-4 border-java-orange pl-4">By rethinking the fundamental relationship between the database engine and the underlying hardware, ReactiveChainDB v2 isn't just an iterative improvement—it is a paradigm shift in distributed systems engineering.</p>
+        </div>
         
         <!-- SEO Tags at Bottom -->
         <div class="mt-12 pt-8 border-t border-white/10">
