@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import gsap from 'gsap';
 import { Calendar, Clock, Tag, ArrowLeft } from 'lucide-react';
-import { blogPosts } from './BlogList';
+import { blogPosts } from '../data/blogPosts';
 
 const BlogPost: React.FC = () => {
   const { id } = useParams<{ id: string }>();
