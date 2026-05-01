@@ -32,33 +32,36 @@ const BlogPost: React.FC = () => {
   return (
     <div ref={articleRef} className="max-w-3xl mx-auto">
       {/* JSON-LD Structured Data for SEO */}
-      <script type="application/ld+json">
-        {JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "BlogPosting",
-          "headline": post.title,
-          "description": post.summary,
-          "datePublished": post.date,
-          "author": {
-            "@type": "Person",
-            "name": "Naman Jain",
-            "url": "https://namanoncode.me"
-          },
-          "publisher": {
-            "@type": "Organization",
-            "name": "Naman Jain Technical Blog",
-            "logo": {
-              "@type": "ImageObject",
-              "url": "https://blogs.namanoncode.me/favicon.svg"
-            }
-          },
-          "mainEntityOfPage": {
-            "@type": "WebPage",
-            "@id": "https://blogs.namanoncode.me/post/" + post.id
-          },
-          "keywords": post.tags.join(', ')
-        })}
-      </script>
+      <script 
+        type="application/ld+json" 
+        dangerouslySetInnerHTML={{ 
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BlogPosting",
+            "headline": post.title,
+            "description": post.summary,
+            "datePublished": post.date,
+            "author": {
+              "@type": "Person",
+              "name": "Naman Jain",
+              "url": "https://namanoncode.me"
+            },
+            "publisher": {
+              "@type": "Organization",
+              "name": "Naman Jain Technical Blog",
+              "logo": {
+                "@type": "ImageObject",
+                "url": "https://blogs.namanoncode.me/favicon.svg"
+              }
+            },
+            "mainEntityOfPage": {
+              "@type": "WebPage",
+              "@id": "https://blogs.namanoncode.me/post/" + post.id
+            },
+            "keywords": post.tags.join(', ')
+          })
+        }} 
+      />
 
       <Link to="/" className="inline-flex items-center gap-2 text-java-light/50 hover:text-java-orange mb-8 transition-colors font-mono text-sm">
         <ArrowLeft size={16} /> cd ..
