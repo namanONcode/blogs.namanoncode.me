@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import gsap from 'gsap';
 import { Calendar, Clock, Tag, ArrowLeft } from 'lucide-react';
 import { blogPosts } from '../data/blogPosts';
+import SEO from '../components/SEO';
 
 const BlogPost: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,11 +32,15 @@ const BlogPost: React.FC = () => {
 
   return (
     <div ref={articleRef} className="max-w-3xl mx-auto">
-      {/* JSON-LD Structured Data for SEO */}
-      <script 
-        type="application/ld+json" 
-        dangerouslySetInnerHTML={{ 
-          __html: JSON.stringify({
+      <SEO 
+        title={`${post.title} | Naman Jain`}
+        description={post.summary}
+        keywords={post.tags}
+        type="article"
+        publishedTime={post.date}
+        url={`https://blogs.namanoncode.me/post/${post.id}`}
+        schemaData={[
+          {
             "@context": "https://schema.org",
             "@type": "BlogPosting",
             "headline": post.title,
@@ -56,11 +61,11 @@ const BlogPost: React.FC = () => {
             },
             "mainEntityOfPage": {
               "@type": "WebPage",
-              "@id": "https://blogs.namanoncode.me/post/" + post.id
+              "@id": `https://blogs.namanoncode.me/post/${post.id}`
             },
             "keywords": post.tags.join(', ')
-          })
-        }} 
+          }
+        ]}
       />
 
       <Link to="/" className="inline-flex items-center gap-2 text-java-light/50 hover:text-java-orange mb-8 transition-colors font-mono text-sm">

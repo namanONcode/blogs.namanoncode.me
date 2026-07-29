@@ -4,6 +4,7 @@ import gsap from 'gsap';
 import { Calendar, Clock, Tag } from 'lucide-react';
 
 import { blogPosts } from '../data/blogPosts';
+import SEO from '../components/SEO';
 
 const BlogList: React.FC = () => {
   const listRef = useRef<HTMLDivElement>(null);
@@ -35,6 +36,10 @@ const BlogList: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
+      <SEO 
+        title="Naman Jain | Technical Blog & Distributed Systems"
+        description="Thoughts, learnings, and deep dives into software engineering, GPU computing, architecture, and ultra-low latency backend systems like ReactiveChainDB."
+      />
       <div ref={headerRef} className="mb-12">
         <div className="inline-block px-3 py-1 rounded-md bg-java-blue/10 border border-java-blue/30 text-java-blue font-mono text-sm mb-4">
           public class TechnicalBlog
