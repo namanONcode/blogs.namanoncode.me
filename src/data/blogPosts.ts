@@ -1,5 +1,130 @@
 export const blogPosts = [
   {
+    id: 'building-linux-event-runtime-weekend',
+    title: 'How I Built a Linux Event Runtime for Java in One Weekend',
+    date: '2026-08-01',
+    readTime: '5 min read',
+    tags: ['Java', 'Linux', 'Open Source', 'Concurrency'],
+    summary: 'From understanding how NGINX uses epoll to publishing a custom Java event runtime on Maven Central.',
+    content: `
+      <div class="space-y-6">
+        <p class="text-xl text-java-light/90 italic mb-8 border-l-4 border-java-orange pl-4">A few weeks ago, I was preparing for backend interviews. One question kept coming up: "How does NGINX handle hundreds of thousands of concurrent connections while using almost no CPU when idle?"</p>
+        
+        <p>That question sent me down a rabbit hole. I started reading about Linux epoll, Netty, Project Reactor, Node.js (libuv), the Go runtime, Java Virtual Threads, and Linux kernel internals.</p>
+        
+        <p>By the end of the weekend, I had built my own open-source Java event runtime called zThread.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">The Curiosity</h2>
+        <p>Everything started with a simple observation. Traditional applications typically look like this:</p>
+        
+        <pre class="bg-black/30 p-4 rounded-lg font-mono text-sm text-java-light/80 overflow-x-auto"><code>while (true) {
+    if (queue.hasData()) {
+        process();
+    }
+}</code></pre>
+
+        <p>Or they submit tasks to a thread pool:</p>
+        <pre class="bg-black/30 p-4 rounded-lg font-mono text-sm text-java-light/80 overflow-x-auto"><code>executor.submit(task);</code></pre>
+        
+        <p>But NGINX doesn't do that. Instead, it sleeps inside <code>epoll_wait()</code> until Linux wakes it. That made me wonder: Could Java applications expose something similar?</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Deep Dive into epoll</h2>
+        <p>To understand the solution, you have to understand the execution flow. When an application calls <code>epoll_wait()</code>, control passes to the Linux kernel. The kernel suspends the thread, consuming zero CPU cycles. When the network card receives a packet, it triggers a hardware interrupt. The kernel processes this interrupt and wakes up the exact application thread waiting for that specific socket.</p>
+        
+        <div class="bg-black/30 p-4 rounded-lg font-mono text-sm text-java-light/80 my-4 text-center space-y-2">
+          <div>Application</div>
+          <div class="text-java-blue">↓</div>
+          <div>epoll_wait()</div>
+          <div class="text-java-blue">↓</div>
+          <div>Linux Kernel suspends thread</div>
+          <div class="text-java-blue">↓</div>
+          <div>Network Card receives data</div>
+          <div class="text-java-blue">↓</div>
+          <div>Kernel wakes application</div>
+        </div>
+        
+        <p>This completely eliminates busy-waiting. You rely entirely on kernel notifications to drive an event-driven architecture.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">First Wrong Idea</h2>
+        <p>I'll be honest. Initially, I thought: Could the JVM's Garbage Collector detect these events? After all, it manages background tasks.</p>
+        <p>Then I realized that GC manages memory, while epoll manages I/O. They have completely different responsibilities. Attempting to mix them would be disastrous. This was my first practical lesson in systems architecture.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Designing zThread</h2>
+        <p>I broke the architecture down into several discrete layers:</p>
+        <div class="bg-black/30 p-4 rounded-lg font-mono text-sm text-java-light/80 my-4 text-center space-y-2">
+          <div>Java Application</div>
+          <div class="text-java-blue">↓</div>
+          <div>ZRuntime</div>
+          <div class="text-java-blue">↓</div>
+          <div>Dispatcher</div>
+          <div class="text-java-blue">↓</div>
+          <div>Event Loop</div>
+          <div class="text-java-blue">↓</div>
+          <div>epoll_wait()</div>
+          <div class="text-java-blue">↓</div>
+          <div>Sockets / eventfd / timerfd / inotify / signalfd</div>
+        </div>
+        
+        <p>The ZRuntime is the entry point for the user. It passes configurations down to the Dispatcher, which manages the core Event Loop. The Event Loop sits inside <code>epoll_wait()</code>, listening across various file descriptors.</p>
+        
+        <p>But I hit a specific challenge: How do you wake the event loop from a completely different Java thread? If the loop is blocked inside a syscall, you can't just set a boolean flag.</p>
+        
+        <p>Linux already solved this with <code>eventfd</code>. By registering an event file descriptor with epoll, a producer thread simply writes an 8-byte integer to it. The kernel instantly wakes the sleeping event loop, allowing the Dispatcher to process the new task.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">The API</h2>
+        <p>I wanted the developer experience to remain simple. Here is what the final API looks like:</p>
+        <pre class="bg-black/30 p-4 rounded-lg font-mono text-sm text-java-light/80 overflow-x-auto"><code>ZRuntime runtime = ZRuntime.create();
+runtime.start();
+
+runtime.post(new CustomEvent());
+runtime.schedule(Duration.ofSeconds(1), () -> System.out.println("Timeout"));
+runtime.watch(socket);</code></pre>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Choosing the Technology</h2>
+        <p>Instead of relying on JNI (Java Native Interface), I used the modern <a href="https://openjdk.org/jeps/454" target="_blank" rel="noopener noreferrer" class="text-java-orange hover:underline">Java Foreign Function & Memory API</a>. This choice resulted in safer, cleaner, and more idiomatic Java code. There is absolutely no handwritten C or JNI code in the repository.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Benchmarking</h2>
+        <p>Benchmarking proved harder than writing the runtime itself. Initially, I compared <code>queue.offer()</code> against <code>eventfd_write()</code>. Someone on a forum pointed out that those aren't equivalent workloads. A queue insertion is an in-memory operation, whereas <code>eventfd_write()</code> crosses the kernel boundary.</p>
+        <p>They were absolutely right. I redesigned the entire benchmark suite to compare end-to-end pipelines: Producer submits → Kernel wakes runtime → Dispatcher routes → Handler executes → Completion. This provided a much more realistic picture of the system's capabilities.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Publishing</h2>
+        <p>After confirming the runtime worked, the real work began. Getting code onto Maven Central requires documentation, examples, reproducible benchmarks, and CI pipelines.</p>
+        <p>Finally, <code>io.github.namanoncode:zthread-core:1.0.0</code> became publicly available.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">What I Learned</h2>
+        <ul class="list-decimal pl-6 space-y-2 text-java-light/90">
+          <li><strong>Performance isn't everything.</strong> Fair benchmarking matters more than synthetic throughput numbers.</li>
+          <li><strong>Kernel syscalls are expensive.</strong> Crossing the user-space boundary takes time, but busy-waiting is objectively worse for system health.</li>
+          <li><strong>Understanding Linux makes you a better Java developer.</strong> Many JVM features are just abstractions over kernel primitives.</li>
+          <li><strong>Netty is incredibly well engineered.</strong> Building even a tiny event runtime gave me a deep appreciation for Netty's robust design.</li>
+          <li><strong>Open source isn't just code.</strong> Documentation, tests, CI, and releases take just as much effort as the core logic.</li>
+        </ul>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Current Status</h2>
+        <p>Today, zThread supports <code>epoll</code>, <code>eventfd</code>, <code>timerfd</code>, <code>signalfd</code>, and <code>inotify</code>. It is fully available on Maven Central.</p>
+        <p>My next goals include integrating with Project Reactor, adding an <code>io_uring</code> backend, and abstracting the API for cross-platform support.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Why I'm Sharing This</h2>
+        <p>I am not claiming this replaces Netty or Project Reactor. The primary goal was to understand how event-driven runtimes work by building one from scratch. The project taught me far more than simply reading documentation ever could.</p>
+        <p>If you have experience with JVM internals, Linux systems programming, or Java performance tuning, I'd love to hear your feedback.</p>
+        
+        <div class="bg-black/30 p-6 rounded-lg border border-white/10 my-6 shadow-xl space-y-4">
+          <p><strong>GitHub:</strong> <a href="https://github.com/namanONcode/zThread" target="_blank" rel="noopener noreferrer" class="text-java-orange hover:underline break-all">https://github.com/namanONcode/zThread</a></p>
+          <div>
+            <p><strong>Maven:</strong></p>
+            <pre class="bg-black/50 p-4 rounded font-mono text-sm text-java-light/80 mt-2 overflow-x-auto"><code>&lt;dependency&gt;
+    &lt;groupId&gt;io.github.namanoncode&lt;/groupId&gt;
+    &lt;artifactId&gt;zthread-core&lt;/artifactId&gt;
+    &lt;version&gt;1.0.0&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+          </div>
+        </div>
+        
+        <p class="italic mt-8 border-t border-white/10 pt-8">Sometimes the best way to understand a technology isn't to read about it. It's to build it. That's exactly what zThread was for.</p>
+      </div>
+    `
+  },
+  {
     id: 'building-linux-native-java-runtime',
     title: 'What I learned while building a Linux-native Java runtime',
     date: '2026-07-29',
