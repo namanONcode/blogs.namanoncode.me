@@ -3,7 +3,7 @@ export const blogPosts = [
     id: 'building-linux-event-runtime-weekend',
     title: 'How I Built a Linux Event Runtime for Java in One Weekend',
     date: '2026-08-01',
-    readTime: '5 min read',
+    readTime: '4 min read',
     tags: ['Java', 'Linux', 'Open Source', 'Concurrency'],
     summary: 'From understanding how NGINX uses epoll to publishing a custom Java event runtime on Maven Central.',
     content: `
