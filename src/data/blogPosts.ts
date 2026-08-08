@@ -1,5 +1,222 @@
 export const blogPosts = [
   {
+    id: 'waking-up-event-loop-eventfd',
+    title: 'Waking Up an Event Loop: How zThread Uses eventfd',
+    date: '2026-08-09',
+    readTime: '6 min read',
+    tags: ['Java', 'Linux', 'Concurrency', 'Kernel'],
+    summary: 'How do you wake a Java thread blocked in epoll_wait() from an entirely different thread? A deep dive into Linux eventfd and lock-free queues.',
+    content: `
+      <div class="space-y-6">
+        <p class="text-xl text-java-light/90 italic mb-8 border-l-4 border-java-orange pl-4">What happens when you send a custom event to an event loop? How does a Java thread wake an event loop that is fast asleep inside a kernel syscall?</p>
+        
+        <p>While building <a href="https://github.com/namanONcode/zThread" target="_blank" rel="noopener noreferrer" class="text-java-orange hover:underline">zThread</a>, this was one of the most interesting problems I had to solve. The event loop is a single thread. Most of the time, it is blocked inside <code>epoll_wait()</code>, consuming zero CPU while waiting for network I/O.</p>
+        
+        <p>But what if a completely different thread—say, an HTTP request handler running on a worker thread—needs to submit a background task back to the event loop?</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">The Problem: Crossing the Boundary</h2>
+        <p>In standard Java concurrency, if Thread A wants to wake Thread B, it uses <code>Object.notify()</code>, <code>LockSupport.unpark()</code>, or inserts an item into a <code>BlockingQueue</code>. The JVM handles the wake-up logic.</p>
+        
+        <p>But in a native event runtime, Thread B isn't waiting on a JVM lock. It's blocked inside the Linux kernel on an <code>epoll_wait()</code> syscall. The JVM doesn't know how to interrupt that gracefully without messy thread interrupts.</p>
+        
+        <p>We absolutely do not want the event loop to continuously poll a queue to see if other threads have submitted work. Busy polling wastes CPU cycles and destroys power efficiency.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">The Linux Solution: eventfd</h2>
+        <p>The answer is a specialized Linux mechanism called <code>eventfd</code>.</p>
+        
+        <p>An <code>eventfd</code> is a file descriptor representing an 8-byte unsigned integer counter maintained by the kernel. Because it is a file descriptor, it can be registered with <code>epoll</code> exactly like a TCP socket.</p>
+        
+        <p>This allows the event loop to wait for completely different kinds of events through the exact same mechanism.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">The Architecture: MPSC + eventfd</h2>
+        <p>Instead of passing the actual data through the kernel, zThread uses a hybrid approach combining a lock-free queue in user-space with a kernel-assisted wake-up signal.</p>
+        
+        <div class="not-prose my-10 p-4 md:p-8 bg-[#0a0a10] border border-white/10 rounded-xl shadow-2xl relative overflow-hidden group">
+          <!-- Title -->
+          <div class="text-center mb-8">
+            <h3 class="text-2xl font-bold text-white mb-2">Eventfd: The Wake-Up Signal</h3>
+            <p class="text-java-light/60 text-sm">How eventfd connects producers to a Linux epoll-based event loop. Hover over elements to explore.</p>
+          </div>
+          
+          <!-- Main Flow Container -->
+          <div class="flex flex-col xl:flex-row items-center xl:items-start justify-between gap-4 md:gap-8 relative z-10">
+            
+            <!-- Producers -->
+            <div class="flex flex-col gap-3 w-full xl:w-auto z-10 transition-transform hover:-translate-y-1">
+              <div class="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 text-center text-blue-200 font-medium text-sm">Producers</div>
+              <div class="flex xl:flex-col gap-2 justify-center flex-wrap">
+                <div class="bg-[#1a1a24] border border-white/10 rounded p-2.5 text-xs text-center flex items-center justify-center gap-2 hover:border-blue-400/50 hover:bg-blue-900/30 transition-colors cursor-default">
+                  <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Thread 1
+                </div>
+                <div class="bg-[#1a1a24] border border-white/10 rounded p-2.5 text-xs text-center flex items-center justify-center gap-2 hover:border-purple-400/50 hover:bg-purple-900/30 transition-colors cursor-default">
+                  <svg class="w-3.5 h-3.5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Thread 2
+                </div>
+                <div class="bg-[#1a1a24] border border-white/10 rounded p-2.5 text-xs text-center flex items-center justify-center gap-2 hover:border-green-400/50 hover:bg-green-900/30 transition-colors cursor-default">
+                  <svg class="w-3.5 h-3.5 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Thread N
+                </div>
+              </div>
+            </div>
+
+            <!-- Arrow down/right -->
+            <div class="hidden xl:flex text-blue-500/50 animate-pulse items-center">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </div>
+            <div class="flex xl:hidden text-blue-500/50 animate-pulse rotate-90 my-1">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </div>
+
+            <!-- MPSC Buffer -->
+            <div class="bg-blue-950/20 border-2 border-blue-500/30 rounded-xl p-5 w-full xl:w-48 text-center relative hover:border-blue-400 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all z-10 group/mpsc">
+              <div class="text-blue-300 font-bold mb-3 text-sm">MPSC Ring Buffer</div>
+              <div class="w-12 h-12 mx-auto mb-3 border-[3px] border-dashed border-blue-400/60 rounded-full animate-[spin_8s_linear_infinite] group-hover/mpsc:border-blue-400 group-hover/mpsc:animate-[spin_3s_linear_infinite]"></div>
+              <div class="text-[10px] leading-tight text-blue-200/70">Lock-free queue for<br/>custom events</div>
+              <div class="absolute -top-3 -right-3 bg-blue-500 text-white text-[9px] px-2 py-0.5 rounded-full opacity-0 group-hover/mpsc:opacity-100 transition-opacity whitespace-nowrap shadow-lg">post(event)</div>
+            </div>
+
+            <!-- Arrow -->
+            <div class="hidden xl:flex text-green-500/50 items-center relative group/arrow">
+              <svg class="w-5 h-5 group-hover/arrow:text-green-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+              <span class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] text-green-400 whitespace-nowrap bg-green-950/80 px-1.5 py-0.5 rounded border border-green-500/30">write(1)</span>
+            </div>
+            <div class="flex xl:hidden text-green-500/50 rotate-90 relative my-1">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+              <span class="absolute top-1/2 left-6 -translate-y-1/2 text-[10px] text-green-400 whitespace-nowrap bg-green-950/80 px-1.5 py-0.5 rounded border border-green-500/30 -rotate-90">write(1)</span>
+            </div>
+
+            <!-- eventfd -->
+            <div class="bg-green-950/20 border-2 border-green-500/30 rounded-xl p-5 w-full xl:w-44 text-center hover:border-green-400 hover:shadow-[0_0_15px_rgba(34,197,94,0.3)] transition-all z-10 group/efd">
+              <div class="text-green-400 font-bold mb-1 text-sm">eventfd</div>
+              <div class="text-[10px] text-green-300/70 mb-3">(wakeup fd)</div>
+              <div class="w-10 h-10 mx-auto mb-3 bg-green-500/10 border-2 border-green-500/50 rounded flex items-center justify-center text-green-400 font-bold text-lg group-hover/efd:bg-green-500/30 transition-colors">E</div>
+              <div class="text-[10px] leading-tight text-green-200/70">8-byte counter<br/>(file descriptor)</div>
+            </div>
+
+            <!-- Arrow -->
+            <div class="hidden xl:flex text-purple-500/50 items-center relative group/repop">
+              <svg class="w-5 h-5 group-hover/repop:text-purple-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+              <span class="absolute -top-8 left-1/2 -translate-x-1/2 text-[9px] text-purple-300 whitespace-nowrap text-center leading-tight bg-purple-950/80 px-1 rounded border border-purple-500/30">registered<br/>with epoll</span>
+            </div>
+            <div class="flex xl:hidden text-purple-500/50 rotate-90 relative my-1">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </div>
+
+            <!-- epoll instance -->
+            <div class="bg-purple-950/20 border-2 border-purple-500/30 rounded-xl p-4 w-full xl:w-48 transition-all z-10 hover:border-purple-400 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+              <div class="flex items-center justify-between mb-3">
+                <div class="text-purple-300 font-bold text-xs">epoll instance</div>
+                <div class="text-[9px] border border-purple-500/50 rounded px-1 text-purple-400 bg-purple-950/50">epoll</div>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <div class="bg-green-950/40 border border-green-500/30 rounded p-1.5 flex items-center gap-2 hover:bg-green-900/60 transition-colors">
+                   <div class="w-5 h-5 border border-green-500 rounded flex items-center justify-center text-green-400 text-[10px] font-bold">E</div>
+                   <div class="text-[10px] text-green-300 leading-tight">eventfd <span class="opacity-70">(wakeup)</span></div>
+                </div>
+                <div class="bg-yellow-950/40 border border-yellow-500/30 rounded p-1.5 flex items-center gap-2 hover:bg-yellow-900/60 transition-colors">
+                   <div class="w-5 h-5 border border-yellow-500 rounded flex items-center justify-center text-yellow-400 text-[10px]"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
+                   <div class="text-[10px] text-yellow-300 leading-tight">timerfd <span class="opacity-70">(timer)</span></div>
+                </div>
+                <div class="bg-blue-950/40 border border-blue-500/30 rounded p-1.5 flex items-center gap-2 hover:bg-blue-900/60 transition-colors">
+                   <div class="w-5 h-5 border border-blue-500 rounded flex items-center justify-center text-blue-400 text-[10px]"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></div>
+                   <div class="text-[10px] text-blue-300 leading-tight">socket fd <span class="opacity-70">(network)</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Arrow -->
+            <div class="hidden xl:flex text-orange-500/50 items-center">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </div>
+            <div class="flex xl:hidden text-orange-500/50 rotate-90 my-1">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </div>
+
+            <!-- Event Loop -->
+            <div class="bg-orange-950/20 border-2 border-orange-500/30 rounded-xl p-4 w-full xl:w-48 hover:border-orange-400 hover:shadow-[0_0_15px_rgba(249,115,22,0.2)] transition-all z-10 group/loop">
+              <div class="flex items-center justify-between mb-3">
+                <div class="text-orange-300 font-bold text-xs leading-tight">Event Loop<br/><span class="text-[9px] font-normal opacity-70">(Single Thread)</span></div>
+                <div class="text-orange-400 group-hover/loop:animate-[spin_2s_linear_infinite]"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></div>
+              </div>
+              
+              <div class="flex flex-col gap-1.5 relative">
+                <!-- Connecting Line -->
+                <div class="absolute left-2.5 top-3 bottom-3 w-px bg-orange-500/20"></div>
+                
+                <div class="flex items-center gap-2.5 relative z-10 bg-[#1a1a24] p-1 rounded border border-transparent hover:border-orange-500/30 hover:bg-orange-900/30 transition-all cursor-default">
+                  <div class="w-5 h-5 rounded-full bg-orange-500/20 border border-orange-500 flex items-center justify-center text-orange-400 text-[9px] font-bold shrink-0">1</div>
+                  <div class="text-[11px] text-orange-200">drain ring buffer</div>
+                </div>
+                <div class="flex items-center gap-2.5 relative z-10 bg-orange-900/20 p-1 rounded transition-all cursor-default shadow-[0_0_8px_rgba(249,115,22,0.15)] border border-orange-500/40">
+                  <div class="w-5 h-5 rounded-full bg-orange-500 border border-orange-500 flex items-center justify-center text-black text-[9px] font-bold shrink-0">2</div>
+                  <div class="text-[11px] text-orange-100 font-mono">epoll_wait() <span class="opacity-50 font-sans text-[9px]">(blocks)</span></div>
+                </div>
+                <div class="flex items-center gap-2.5 relative z-10 bg-[#1a1a24] p-1 rounded border border-transparent hover:border-orange-500/30 hover:bg-orange-900/30 transition-all cursor-default">
+                  <div class="w-5 h-5 rounded-full bg-orange-500/20 border border-orange-500 flex items-center justify-center text-orange-400 text-[9px] font-bold shrink-0">3</div>
+                  <div class="text-[11px] text-orange-200">events ready</div>
+                </div>
+                <div class="flex items-center gap-2.5 relative z-10 bg-[#1a1a24] p-1 rounded border border-transparent hover:border-orange-500/30 hover:bg-orange-900/30 transition-all cursor-default">
+                  <div class="w-5 h-5 rounded-full bg-orange-500/20 border border-orange-500 flex items-center justify-center text-orange-400 text-[9px] font-bold shrink-0">4</div>
+                  <div class="text-[11px] text-orange-200">process events</div>
+                </div>
+                <div class="flex items-center gap-2.5 relative z-10 bg-[#1a1a24] p-1 rounded border border-transparent hover:border-orange-500/30 hover:bg-orange-900/30 transition-all cursor-default">
+                  <div class="w-5 h-5 rounded-full bg-orange-500/20 border border-orange-500 flex items-center justify-center text-orange-400 text-[9px] font-bold shrink-0">5</div>
+                  <div class="text-[11px] text-orange-200">repeat</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Flow description at bottom -->
+          <div class="mt-8 pt-5 border-t border-white/10 relative z-10">
+            <div class="text-center text-xs font-bold text-white/80 mb-3 uppercase tracking-wider">Execution Flow</div>
+            <div class="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 text-[11px] text-java-light/70 text-center font-mono">
+              <div class="px-2 py-1 bg-white/5 rounded hover:bg-blue-900/40 hover:text-blue-300 hover:border-blue-500/30 border border-transparent transition-all cursor-default">1. Producer posts</div>
+              <div class="hidden md:block text-java-light/30">→</div>
+              <div class="px-2 py-1 bg-white/5 rounded hover:bg-green-900/40 hover:text-green-300 hover:border-green-500/30 border border-transparent transition-all cursor-default">2. write(1) to eventfd</div>
+              <div class="hidden md:block text-java-light/30">→</div>
+              <div class="px-2 py-1 bg-white/5 rounded hover:bg-purple-900/40 hover:text-purple-300 hover:border-purple-500/30 border border-transparent transition-all cursor-default">3. epoll marks readable</div>
+              <div class="hidden md:block text-java-light/30">→</div>
+              <div class="px-2 py-1 bg-white/5 rounded hover:bg-orange-900/40 hover:text-orange-300 hover:border-orange-500/30 border border-transparent transition-all cursor-default">4. epoll_wait() returns</div>
+            </div>
+          </div>
+
+          <!-- Background decorative elements -->
+          <div class="absolute top-0 left-1/4 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute bottom-0 right-1/4 w-64 h-64 bg-orange-500/5 rounded-full blur-3xl pointer-events-none"></div>
+        </div>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">The Execution Flow</h2>
+        <p>When a producer thread wants to send an event, the exact sequence is:</p>
+        
+        <ol class="list-decimal pl-6 space-y-4 text-java-light/90">
+          <li><strong>Enqueue the payload:</strong> The producer thread inserts the task into a Multi-Producer Single-Consumer (MPSC) Ring Buffer. This is a lock-free queue in Java memory.</li>
+          <li><strong>Signal the kernel:</strong> The producer thread writes the value <code>1</code> (an 8-byte integer) to the <code>eventfd</code> using a fast syscall.</li>
+          <li><strong>Kernel Notification:</strong> The Linux kernel instantly marks the <code>eventfd</code> as readable.</li>
+          <li><strong>Wake up:</strong> <code>epoll_wait()</code> detects the readable file descriptor and unblocks the event loop thread.</li>
+          <li><strong>Process:</strong> The event loop drains the MPSC ring buffer and executes the custom events. Finally, it reads from the <code>eventfd</code> to reset the kernel counter back to zero.</li>
+        </ol>
+        
+        <p>The queue stores the actual work, while the <code>eventfd</code> provides the highly efficient, kernel-assisted wake-up mechanism.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Why I Love This Implementation</h2>
+        <p>This is one of the implementation details I've enjoyed most while building zThread. It elegantly connects several layers that Java developers normally treat as isolated concepts:</p>
+        
+        <ul class="list-disc pl-6 space-y-2 text-java-light/90">
+          <li>Java Concurrency (Producer/Consumer patterns)</li>
+          <li>Lock-free data structures (MPSC Ring Buffers)</li>
+          <li>Linux file descriptors</li>
+          <li>epoll multiplexing</li>
+          <li>Kernel-assisted waiting</li>
+        </ul>
+        
+        <p>It also highlights a beautiful design philosophy in Linux: everything is a file. The event loop doesn't need custom logic to handle cross-thread communication. To <code>epoll</code>, a TCP packet arriving, a timer expiring (<code>timerfd</code>), a file system change (<code>inotify</code>), and a cross-thread wake-up (<code>eventfd</code>) all look exactly the same—just a readable file descriptor.</p>
+        
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Documenting for Contributors</h2>
+        <p>I am continuing to document these internals as I build zThread. My goal is to ensure that future contributors don't need to be Linux kernel experts to understand how the pieces fit together.</p>
+        <p>If you want to read the source code mapping Java's Foreign Function Memory API to these Linux syscalls, check out the repository on GitHub.</p>
+      </div>
+    `
+  },
+  {
     id: 'building-linux-event-runtime-weekend',
     title: 'How I Built a Linux Event Runtime for Java in One Weekend',
     date: '2026-08-01',
