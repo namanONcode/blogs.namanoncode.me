@@ -1,5 +1,56 @@
 export const blogPosts = [
   {
+    id: 'zthread-v1-0-1-release',
+    title: 'zThread v1.0.1 Released: Solidifying the Foundation',
+    date: '2026-08-16',
+    readTime: '3 min read',
+    tags: ['Java', 'OpenSource', 'JVM', 'Linux'],
+    summary: 'Announcing the release of zThread v1.0.1, focusing on security, dependency maintenance, and automated benchmark pipelines for the Linux-native Java runtime.',
+    content: `
+      <div class="space-y-6">
+        <p class="text-xl text-java-light/90 italic mb-8 border-l-4 border-java-orange pl-4">
+          I am happy to announce the release of zThread v1.0.1. This patch release intentionally focuses on solidifying the foundation through dependency maintenance and improved automated benchmarking.
+        </p>
+        
+        <p>When I first <a href="/post/building-linux-event-runtime-weekend" class="text-java-blue hover:underline">built this Linux event runtime</a>, the goal was raw performance and understanding JVM internals. Now that the project is available to the public, the focus shifts to stability.</p>
+      
+        <h2 class="text-2xl font-bold text-java-orange mt-8">What's Improved in v1.0.1?</h2>
+        
+        <h3 class="text-xl font-bold text-white mt-6">1. Security and Dependency Maintenance</h3>
+        <p>This release merges over 40 pull requests—almost entirely from Dependabot—addressing dependency vulnerabilities and bringing development tools up to date. Key updates include bumping <code>io.vertx:vertx-core</code>, updating <code>io.netty:netty-all</code>, and migrating several GitHub Actions to their latest major versions. Maintaining a clean, secure dependency tree is critical for any systems programming project.</p>
+      
+        <h3 class="text-xl font-bold text-white mt-6">2. Automated Benchmark Suite</h3>
+        <p>Performance numbers are meaningless if they are not reproducible. I have significantly improved the CI benchmark suite. The goal is not simply to produce the highest throughput number, but to measure and understand the system dynamically.</p>
+        
+        <p>The automated suite now explicitly tracks:</p>
+        <ul class="list-disc pl-6 space-y-2 text-java-light/90">
+          <li><strong>Throughput</strong> under sustained loads</li>
+          <li><strong>Latency</strong> percentiles (p99, p99.9)</li>
+          <li><strong>Event-loop behavior</strong> (especially how it interacts with <a href="/post/waking-up-event-loop-eventfd" class="text-java-blue hover:underline">eventfd and kernel wake-ups</a>)</li>
+          <li><strong>Queue performance</strong> across the lock-free data structures</li>
+          <li><strong>Native event overhead</strong> introduced by the Java Foreign Function & Memory (FFM) API</li>
+        </ul>
+      
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Available on Maven Central</h2>
+        <p>Publishing artifacts shouldn't require manual intervention. The entire release workflow—from dependency checks and testing to building and publishing to Maven Central—is now handled entirely by automated GitHub Actions.</p>
+        
+        <p>You can pull <code>zthread-core</code> into your project right now:</p>
+        
+        <pre class="bg-[#0a0a10] p-4 rounded-lg border border-white/10 overflow-x-auto my-4 text-sm text-java-blue font-mono">
+&lt;dependency&gt;
+    &lt;groupId&gt;io.github.namanoncode&lt;/groupId&gt;
+    &lt;artifactId&gt;zthread-core&lt;/artifactId&gt;
+    &lt;version&gt;1.0.1&lt;/version&gt;
+&lt;/dependency&gt;</pre>
+      
+        <h2 class="text-2xl font-bold text-java-orange mt-8">Looking for Contributors</h2>
+        <p>This project is still very much an experiment in public. I would really appreciate it if you pull the dependency, try running it on your own Linux machine, and report what breaks.</p>
+        
+        <p>Even a simple bug report or a benchmark result run on different hardware is incredibly useful. Check out the <a href="https://github.com/namanONcode/zThread" target="_blank" rel="noopener noreferrer" class="text-java-orange hover:underline">source code on GitHub</a> and let me know what you think!</p>
+      </div>
+    `
+  },
+  {
     id: 'waking-up-event-loop-eventfd',
     title: 'Waking Up an Event Loop: How zThread Uses eventfd',
     date: '2026-08-09',
